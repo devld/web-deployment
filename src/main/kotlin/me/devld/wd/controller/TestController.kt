@@ -1,10 +1,13 @@
 package me.devld.wd.controller
 
 import me.devld.wd.config.AppConfig
+import me.devld.wd.config.security.DataEncryption
+import me.devld.wd.data.DeploymentTriggerData
 import me.devld.wd.data.Project
-import me.devld.wd.deploy.DeploymentService
 import me.devld.wd.service.ProjectService
+import me.devld.wd.service.deploy.DeploymentService
 import org.springframework.web.bind.annotation.*
+import javax.validation.Valid
 
 /**
  * TestController
@@ -12,26 +15,35 @@ import org.springframework.web.bind.annotation.*
  * @author devld
  */
 @RestController
+@RequestMapping("/test")
 class TestController(
     private val appConfig: AppConfig,
     private val projectService: ProjectService,
-    private val deploymentService: DeploymentService
+    private val deploymentService: DeploymentService,
+    private val enc: DataEncryption,
 ) {
 
-    @GetMapping("/test")
+    @GetMapping
     fun test(): String {
         return appConfig.dataDir
     }
 
-    @GetMapping("/test/project/{name}")
+    @GetMapping("/project/{name}")
     fun getProject(@PathVariable name: String): Project? = projectService.getProject(name)
 
-    @PostMapping("/test/deployment/{id}")
-    fun triggerDeployment(
-        @PathVariable id: Long,
-        @RequestParam("version", required = false) version: String?
-    ) {
-        deploymentService.triggerDeployment(id, version)
+    @PostMapping("/deploy")
+    fun triggerDeployment(@Valid @RequestBody data: DeploymentTriggerData) {
+        deploymentService.triggerDeployment(data)
+    }
+
+    @GetMapping("/encrypt")
+    fun encrypt(@RequestParam s: String): String {
+        return enc.encryptToString(s.toByteArray())
+    }
+
+    @GetMapping("/decrypt")
+    fun decrypt(@RequestParam e: String): String {
+        return String(enc.decrypt(e))
     }
 
 }

@@ -23,5 +23,3 @@ interface ProjectVersionRepository : JpaRepository<ProjectVersion, Long> {
 @Repository
 interface ArtifactRepository : JpaRepository<Artifact, Long> {
 }
-
-

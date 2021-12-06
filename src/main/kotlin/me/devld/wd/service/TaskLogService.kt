@@ -1,6 +1,6 @@
 package me.devld.wd.service
 
-import me.devld.wd.deploy.LogLevel
+import me.devld.wd.service.deploy.LogLevel
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 

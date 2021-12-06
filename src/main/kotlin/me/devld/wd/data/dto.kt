@@ -1,15 +1,11 @@
 package me.devld.wd.data
 
 import com.fasterxml.jackson.annotation.JsonIgnore
-import org.springframework.http.HttpStatus
 import org.springframework.security.core.GrantedAuthority
 import org.springframework.security.core.userdetails.UserDetails
-
-class Response<T>(
-    val data: T,
-    @JsonIgnore val status: HttpStatus = HttpStatus.OK,
-    val message: String?
-)
+import javax.validation.constraints.NotBlank
+import javax.validation.constraints.NotNull
+import javax.validation.constraints.Null
 
 class UserDto(private val user: User) : UserDetails {
     override fun getAuthorities(): Collection<GrantedAuthority> = emptyList()
@@ -26,3 +22,12 @@ class UserDto(private val user: User) : UserDetails {
 
 }
 
+class DeploymentTriggerData(
+    @field:NotNull
+    var deploymentId: Long? = null,
+    var projectVersion: String? = null,
+    @field:NotBlank
+    var message: String? = null,
+    @field:Null
+    var triggerBy: String? = null
+)

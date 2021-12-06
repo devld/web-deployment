@@ -25,12 +25,13 @@ repositories {
 
 dependencies {
     implementation("com.hierynomus:sshj:0.32.0")
-    runtimeOnly("com.h2database:h2:1.4.200")
+    runtimeOnly("com.h2database:h2:2.0.202")
 
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa:2.5.6")
-    implementation("org.springframework.boot:spring-boot-starter-quartz:2.5.6")
-    implementation("org.springframework.boot:spring-boot-starter-security:2.5.6")
-    implementation("org.springframework.boot:spring-boot-starter-web:2.5.6")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa:2.6.1")
+    implementation("org.springframework.boot:spring-boot-starter-quartz:2.6.1")
+    implementation("org.springframework.boot:spring-boot-starter-security:2.6.1")
+    implementation("org.springframework.boot:spring-boot-starter-web:2.6.1")
+    implementation("org.springframework.boot:spring-boot-starter-validation:2.6.1")
 
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.0")
     implementation("org.jetbrains.kotlin:kotlin-reflect")

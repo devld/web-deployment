@@ -1,4 +1,4 @@
-package me.devld.wd.deploy
+package me.devld.wd.service.deploy
 
 import me.devld.wd.data.Project
 import me.devld.wd.data.ProjectVersion

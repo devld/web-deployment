@@ -1,18 +1,16 @@
-package me.devld.wd.deploy
+package me.devld.wd.service.deploy
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
-import me.devld.wd.data.Deployment
-import me.devld.wd.data.DeploymentTask
+import me.devld.wd.data.*
 import me.devld.wd.data.DeploymentTaskStatus.*
-import me.devld.wd.data.Project
-import me.devld.wd.data.ProjectVersion
-import me.devld.wd.deploy.ActionParams.Companion.getDescriptor
+import me.devld.wd.repository.DeploymentLogRepository
 import me.devld.wd.repository.DeploymentRepository
 import me.devld.wd.repository.DeploymentTaskRepository
 import me.devld.wd.service.ProjectService
 import me.devld.wd.service.TaskLogService
 import me.devld.wd.service.VariableService
+import me.devld.wd.service.deploy.ActionParams.Companion.getDescriptor
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.context.annotation.Lazy
@@ -34,6 +32,7 @@ import kotlin.reflect.KClass
 class DeploymentService(
     private val projectService: ProjectService,
     private val deploymentRepo: DeploymentRepository,
+    private val deploymentLogRepo: DeploymentLogRepository,
     private val taskRepo: DeploymentTaskRepository,
     private val variableService: VariableService,
     private val paramResolvers: List<ActionParamResolver>,
@@ -56,16 +55,27 @@ class DeploymentService(
     private val executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors())
     private val submittedTaskIds: MutableMap<Long, Future<*>?> = ConcurrentHashMap()
 
-    fun triggerDeployment(deploymentId: Long, version: String?) {
-        val deployment = deploymentRepo.findById(deploymentId).orElseThrow {
-            IllegalArgumentException("Deployment $deploymentId not found")
+    fun triggerDeployment(triggerData: DeploymentTriggerData) {
+        val deployment = deploymentRepo.findById(triggerData.deploymentId!!).orElseThrow {
+            IllegalArgumentException("Deployment ${triggerData.deploymentId} not found")
         }
-        val projectVersion = (version?.let { projectService.getProjectVersion(deployment.project?.id!!, version) }
-            ?: projectService.getProjectLatestVersion(deployment.project?.id!!))
-            ?: throw IllegalArgumentException("Project version not exists")
+        val projectVersion =
+            (triggerData.projectVersion?.let {
+                projectService.getProjectVersion(
+                    deployment.project?.id!!,
+                    triggerData.projectVersion!!
+                )
+            } ?: projectService.getProjectLatestVersion(deployment.project?.id!!))
+                ?: throw IllegalArgumentException("Project version not exists")
 
-        val tasks = createTasks(deployment)
-        rescheduleTasks(tasks.map { it.id!! }, projectVersion)
+        val tasks = createTasks(triggerData, deployment.steps!!)
+        self.rescheduleTasks(tasks.map { it.id!! }, projectVersion)
+    }
+
+    fun cancelDeployment(logId: Long) {
+        deploymentLogRepo.findById(logId).orElseThrow {
+            IllegalArgumentException("Deployment log $logId not found")
+        }.let { cancelTasks(it.tasks!!.map { t -> t.id!! }) }
     }
 
     fun cancelTasks(taskIds: List<Long>) {
@@ -80,43 +90,55 @@ class DeploymentService(
         }
     }
 
+    fun getDeploymentLog(logId: Long): DeploymentLog {
+        return deploymentLogRepo.findById(logId).orElseThrow {
+            IllegalArgumentException("Deployment log $logId not found")
+        }
+    }
+
     @Transactional(rollbackFor = [Exception::class])
-    protected fun createTasks(deployment: Deployment): List<DeploymentTask> {
-        val steps = deployment.steps!!
+    fun createTasks(triggerData: DeploymentTriggerData, steps: List<DeploymentStep>): List<DeploymentTask> {
+        val log = deploymentLogRepo.save(DeploymentLog().apply {
+            deploymentId = triggerData.deploymentId
+            createdAt = System.currentTimeMillis()
+            createdBy = triggerData.triggerBy
+            message = triggerData.message
+        })
         val tasks = steps.map { step ->
-            taskRepo.save(DeploymentTask().also {
-                it.deploymentId = deployment.id
-                it.deploymentStep = step
-                it.waitingFor = mutableListOf()
-                it.wakeupTasks = mutableListOf()
-                it.status = PENDING
-                it.taskOrder = step.stepOrder
-                it.createdAt = System.currentTimeMillis()
+            taskRepo.save(DeploymentTask().apply {
+                deploymentLog = log
+                deploymentStep = step
+                waitingFor = mutableListOf()
+                wakeupTasks = mutableListOf()
+                status = PENDING
+                taskOrder = step.stepOrder
+                createdAt = System.currentTimeMillis()
             })
         }
         tasks.forEachIndexed { index, task ->
-            steps.subList(0, index).reversed().find { !it.async }?.let {
-                task.waitingFor!!.add(task.id!!)
+            tasks.subList(0, index).reversed().find { !it.deploymentStep!!.async }?.let {
+                task.waitingFor!!.add(it.id!!)
             }
             run {
-                steps.subList(index + 1, steps.size).forEach {
-                    task.wakeupTasks!!.add(task.id!!)
-                    if (!it.async) return@run
+                tasks.subList(index + 1, tasks.size).forEach {
+                    task.wakeupTasks!!.add(it.id!!)
+                    if (!it.deploymentStep!!.async) return@run
                 }
             }
-            if (task.waitingFor!!.isNotEmpty() && task.wakeupTasks!!.isNotEmpty()) {
+            if (task.waitingFor!!.isNotEmpty() || task.wakeupTasks!!.isNotEmpty()) {
                 taskRepo.save(task)
             }
         }
         return tasks
     }
 
-    private fun rescheduleTasks(taskIds: List<Long>, projectVersion: ProjectVersion): List<DeploymentTask> {
+    @Transactional(rollbackFor = [Exception::class])
+    fun rescheduleTasks(taskIds: List<Long>, projectVersion: ProjectVersion): List<DeploymentTask> {
         if (taskIds.isEmpty()) return emptyList()
         val tasks = taskRepo.getByIds(taskIds)
         val tasksMap = tasks.associateBy { it.id!! }
         val filteredTasks = tasks.filter { task ->
-            task.waitingFor!!.isEmpty() || task.waitingFor!!.map { tasksMap[it]!! }.none {
+            task.waitingFor!!.isEmpty() || task.waitingFor!!.map { tasksMap[it] ?: taskRepo.getById(it) }.none {
                 !it.status!!.finished || (it.status != SUCCESS && !it.deploymentStep!!.ignoreOnFailure)
             }
         }
@@ -143,13 +165,17 @@ class DeploymentService(
     }
 
     @Transactional(rollbackFor = [Exception::class])
-    protected fun task(taskId: Long, update: ((DeploymentTask) -> DeploymentTask?)? = null): DeploymentTask? {
+    fun task(taskId: Long, update: ((DeploymentTask) -> DeploymentTask?)? = null): DeploymentTask? {
         val task = taskRepo.findById(taskId).orElseThrow {
             IllegalArgumentException("Task $taskId not found")
         }
         if (update == null) return task
         val temp = update(task) ?: return null
         return taskRepo.save(temp)
+    }
+
+    fun createActionContext(task: DeploymentTask, projectVersion: ProjectVersion): ActionContext {
+        return ActionContextImpl(task, projectVersion)
     }
 
     private fun resolveParam(params: Map<String, String>, descriptor: ActionParamDescriptor): Any? {
@@ -172,6 +198,7 @@ class DeploymentService(
                 log.warn("Task $taskId is not pending")
                 return@task null
             }
+            it.deploymentLog!!.runtimeData // eager fetch
             it.status = RUNNING
             it.startedAt = System.currentTimeMillis()
             it
@@ -181,7 +208,7 @@ class DeploymentService(
         try {
             val step = task.deploymentStep!!
             val action = actions[step.action!!] ?: throw IllegalArgumentException("Action ${step.action} not found")
-            val ctx = ActionContextImpl(task, projectVersion)
+            val ctx = self.createActionContext(task, projectVersion)
             action.execute(ctx)
 
             success = true
@@ -200,7 +227,7 @@ class DeploymentService(
             }
             submittedTaskIds.remove(taskId)
             if (task.wakeupTasks?.isNotEmpty()!!) {
-                rescheduleTasks(task.wakeupTasks!!, projectVersion)
+                self.rescheduleTasks(task.wakeupTasks!!, projectVersion)
             }
         }
     }
@@ -209,11 +236,12 @@ class DeploymentService(
         executor.shutdownNow()
     }
 
-    inner class ActionContextImpl(
+    private inner class ActionContextImpl(
         private val task: DeploymentTask,
         private val projectVersion: ProjectVersion,
     ) : ActionContext {
-        private val values = task.runtimeData?.let { OBJECT_MAPPER.readValue(it) } ?: mutableMapOf<String, String>()
+        private val values =
+            task.deploymentLog!!.runtimeData?.let { OBJECT_MAPPER.readValue(it) } ?: mutableMapOf<String, String>()
 
         private val step = task.deploymentStep!!
 
@@ -264,12 +292,10 @@ class DeploymentService(
 
         override fun getValue(key: String): String? = values[key]
         override fun setValue(key: String, value: String) {
-            synchronized(this) {
-                values[key] = value
-                self.task(task.id!!) {
-                    it.runtimeData = OBJECT_MAPPER.writeValueAsString(values)
-                    it
-                }
+            values[key] = value
+            self.task(task.id!!) {
+                it.deploymentLog!!.runtimeData = OBJECT_MAPPER.writeValueAsString(values)
+                it
             }
         }
 

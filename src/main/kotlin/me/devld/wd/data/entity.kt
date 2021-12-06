@@ -60,8 +60,10 @@ open class Server : BaseEntity() {
     @Column(nullable = false, length = 16)
     open var authMethod: AuthMethod? = null
 
-    @Column(length = 128)
+    @Column(length = 512)
     open var password: String? = null
+
+    @Column(length = 2048)
     open var privateKey: String? = null
 }
 
@@ -91,7 +93,7 @@ open class ProjectVersion : BaseEntity() {
     @Column(nullable = false)
     open var projectId: Long? = null
 
-    @OneToMany(targetEntity = Artifact::class)
+    @OneToMany(targetEntity = Artifact::class, fetch = FetchType.EAGER)
     @JoinColumn(name = "PROJECT_VERSION_ID")
     open var artifacts: List<Artifact>? = null
 }
@@ -107,15 +109,15 @@ open class Artifact : BaseEntity() {
     @Column(nullable = false, length = 32)
     open var type: ArtifactType? = null
 
-    @Column(nullable = false, length = 512)
-    open var file: String? = null
+    @Column(nullable = false)
+    open var createdAt: Long? = null
 }
 
 enum class ArtifactType {
-    JAR,
-    TAR_GZ,
+    ANY,
     ZIP,
-    ANY
+    JAR,
+    TAR_GZ
 }
 
 @Entity
@@ -153,16 +155,32 @@ open class DeploymentStep : BaseEntity() {
 }
 
 @Entity
-@Table(indexes = [Index(columnList = "deploymentId")])
-open class DeploymentTask : BaseEntity() {
+open class DeploymentLog : BaseEntity() {
     @Column(nullable = false)
     open var deploymentId: Long? = null
 
-    @ManyToOne
-    open var deploymentStep: DeploymentStep? = null
+    @Column(nullable = false)
+    open var createdAt: Long? = null
+
+    open var createdBy: String? = null
+
+    open var message: String? = null
 
     @Column(nullable = true, length = 4096)
     open var runtimeData: String? = null
+
+    @OneToMany(mappedBy = "deploymentLog", targetEntity = DeploymentTask::class, fetch = FetchType.EAGER)
+    @OrderBy("taskOrder")
+    open var tasks: List<DeploymentTask>? = null
+}
+
+@Entity
+open class DeploymentTask : BaseEntity() {
+    @ManyToOne(fetch = FetchType.LAZY)
+    open var deploymentLog: DeploymentLog? = null
+
+    @ManyToOne
+    open var deploymentStep: DeploymentStep? = null
 
     @Column(nullable = false)
     open var status: DeploymentTaskStatus? = null

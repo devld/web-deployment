@@ -1,9 +1,9 @@
 package me.devld.wd.config.security
 
-import me.devld.wd.config.ExceptionHandler
 import me.devld.wd.data.NotFoundException
 import me.devld.wd.data.UserDto
 import me.devld.wd.service.UserService
+import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder
@@ -24,7 +24,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * @author devld
  */
 @Configuration
-class SecurityConfig(private val eh: ExceptionHandler) : WebSecurityConfigurerAdapter() {
+class SecurityConfig : WebSecurityConfigurerAdapter() {
+
+    private val log = LoggerFactory.getLogger(SecurityConfig::class.java)
 
     override fun configure(http: HttpSecurity?) {
         http {
@@ -66,12 +68,14 @@ class SecurityConfig(private val eh: ExceptionHandler) : WebSecurityConfigurerAd
 
     @Bean
     fun authenticationEntryPoint() = AuthenticationEntryPoint { _, response, e ->
-        eh.writeResponse(eh.onAuthenticationException(e), response)
+        log.debug("401", e)
+        response.status = 401
     }
 
     @Bean
     fun accessDeniedHandler() = AccessDeniedHandler { _, response, e ->
-        eh.writeResponse(eh.onAccessDeniedException(e), response)
+        log.debug("403", e)
+        response.status = 403
     }
 
 }
