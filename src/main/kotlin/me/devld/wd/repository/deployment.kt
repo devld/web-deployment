@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository
 
 @Repository
 interface DeploymentRepository : JpaRepository<Deployment, Long> {
+    fun findAllByProjectId(projectId: Long): List<Deployment>
 }
 
 @Repository

@@ -32,4 +32,6 @@ class ProjectService(
 
     fun getProject(id: Long): Project? = projectRepo.findById(id).orElse(null)
 
+    fun getProjectVersion(id: Long): ProjectVersion? = projectVersionRepo.findById(id).orElse(null)
+
 }

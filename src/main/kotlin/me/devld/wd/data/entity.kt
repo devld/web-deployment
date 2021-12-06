@@ -90,10 +90,11 @@ open class ProjectVersion : BaseEntity() {
     @Column(nullable = false)
     open var version: Int? = null
 
-    @Column(nullable = false)
-    open var projectId: Long? = null
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(nullable = false)
+    open var project: Project? = null
 
-    @OneToMany(targetEntity = Artifact::class, fetch = FetchType.EAGER)
+    @OneToMany(targetEntity = Artifact::class, fetch = FetchType.LAZY)
     @JoinColumn(name = "PROJECT_VERSION_ID")
     open var artifacts: List<Artifact>? = null
 }
@@ -114,10 +115,7 @@ open class Artifact : BaseEntity() {
 }
 
 enum class ArtifactType {
-    ANY,
-    ZIP,
-    JAR,
-    TAR_GZ
+    ANY
 }
 
 @Entity
@@ -125,17 +123,24 @@ open class Deployment : BaseEntity() {
     @Column(length = 1024)
     open var description: String? = null
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(nullable = false)
     open var project: Project? = null
 
-    @OneToMany(mappedBy = "deployment", targetEntity = DeploymentStep::class, fetch = FetchType.EAGER)
+    @OneToMany(
+        mappedBy = "deployment",
+        targetEntity = DeploymentStep::class,
+        fetch = FetchType.EAGER,
+        cascade = [CascadeType.ALL]
+    )
     @OrderBy("stepOrder")
     open var steps: List<DeploymentStep>? = null
 }
 
 @Entity
 open class DeploymentStep : BaseEntity() {
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(nullable = false)
     open var deployment: Deployment? = null
 
     @Column(nullable = false)
@@ -169,7 +174,7 @@ open class DeploymentLog : BaseEntity() {
     @Column(nullable = true, length = 4096)
     open var runtimeData: String? = null
 
-    @OneToMany(mappedBy = "deploymentLog", targetEntity = DeploymentTask::class, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "deploymentLog", targetEntity = DeploymentTask::class, fetch = FetchType.LAZY)
     @OrderBy("taskOrder")
     open var tasks: List<DeploymentTask>? = null
 }
@@ -179,7 +184,7 @@ open class DeploymentTask : BaseEntity() {
     @ManyToOne(fetch = FetchType.LAZY)
     open var deploymentLog: DeploymentLog? = null
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     open var deploymentStep: DeploymentStep? = null
 
     @Column(nullable = false)

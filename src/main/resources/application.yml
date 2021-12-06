@@ -5,7 +5,7 @@ spring:
     throw-exception-if-no-handler-found: true
 
   datasource:
-    url: jdbc:h2:file:${app.data-dir}/data;AUTO_SERVER=TRUE
+    url: jdbc:h2:${app.data-dir}/data;AUTO_SERVER=TRUE
     driver-class-name: org.h2.Driver
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect

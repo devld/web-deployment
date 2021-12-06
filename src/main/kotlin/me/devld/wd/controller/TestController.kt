@@ -2,7 +2,7 @@ package me.devld.wd.controller
 
 import me.devld.wd.config.AppConfig
 import me.devld.wd.config.security.DataEncryption
-import me.devld.wd.data.DeploymentTriggerData
+import me.devld.wd.data.DeploymentTriggerIn
 import me.devld.wd.data.Project
 import me.devld.wd.service.ProjectService
 import me.devld.wd.service.deploy.DeploymentService
@@ -32,7 +32,7 @@ class TestController(
     fun getProject(@PathVariable name: String): Project? = projectService.getProject(name)
 
     @PostMapping("/deploy")
-    fun triggerDeployment(@Valid @RequestBody data: DeploymentTriggerData) {
+    fun triggerDeployment(@Valid @RequestBody data: DeploymentTriggerIn) {
         deploymentService.triggerDeployment(data)
     }
 

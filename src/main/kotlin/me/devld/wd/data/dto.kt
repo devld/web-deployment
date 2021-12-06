@@ -22,7 +22,7 @@ class UserDto(private val user: User) : UserDetails {
 
 }
 
-class DeploymentTriggerData(
+class DeploymentTriggerIn(
     @field:NotNull
     var deploymentId: Long? = null,
     var projectVersion: String? = null,
@@ -31,3 +31,33 @@ class DeploymentTriggerData(
     @field:Null
     var triggerBy: String? = null
 )
+
+
+class DeploymentOut(var id: Long, var description: String?, steps: List<DeploymentStepOut>) {
+    constructor(deployment: Deployment) : this(
+        deployment.id!!,
+        deployment.description,
+        deployment.steps!!.map { DeploymentStepOut(it) })
+}
+
+class DeploymentStepOut(
+    var id: Long,
+    var deploymentId: Long,
+    var async: Boolean,
+    var ignoreOnFailure: Boolean,
+    var stepOrder: Int,
+    var action: String,
+    var actionParams: String?
+) {
+    constructor(step: DeploymentStep) : this(
+        step.id!!,
+        step.deployment!!.id!!,
+        step.async,
+        step.ignoreOnFailure,
+        step.stepOrder!!,
+        step.action!!,
+        step.actionParams
+    )
+}
+
+
